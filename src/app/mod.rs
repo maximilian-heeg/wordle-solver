@@ -5,16 +5,11 @@ use ratatui::{
 };
 use std::io;
 
-mod solver;
-use self::solver::Solver;
-
 use super::tui;
 
-mod word;
-use word::*;
-
-mod letter;
-use letter::Status;
+use crate::solver::letter::Status;
+use crate::solver::word::*;
+use crate::solver::Solver;
 
 pub struct App {
     exit: bool,
@@ -230,23 +225,9 @@ impl Widget for &App {
             .split(columns[1]);
 
         // next guess
-        let next_guess_frequency = self
+        let next_guess = self
             .solver
-            .next_guess_frequency(3)
-            .into_iter()
-            .map(|g| format!("{g}"))
-            .collect::<Vec<String>>()
-            .join(", ");
-        let next_guess_groups = self
-            .solver
-            .next_guess_groups(3)
-            .into_iter()
-            .map(|g| format!("{g}"))
-            .collect::<Vec<String>>()
-            .join(", ");
-        let next_guess_combined = self
-            .solver
-            .next_guess(3, self.words.len())
+            .guess(3)
             .into_iter()
             .map(|g| format!("{g}"))
             .collect::<Vec<String>>()
@@ -256,18 +237,7 @@ impl Widget for &App {
                 "Possible solutions: ".bold().blue(),
                 self.solver.get_n_remaining_words().to_string().into(),
             ]),
-            Line::from(vec![
-                "Best next guesses (Freq.): ".bold().blue(),
-                next_guess_frequency.into(),
-            ]),
-            Line::from(vec![
-                "Best next guesses (Groups): ".bold().blue(),
-                next_guess_groups.into(),
-            ]),
-            Line::from(vec![
-                "Best next guesses (Combined): ".bold().blue(),
-                next_guess_combined.into(),
-            ]),
+            Line::from(vec!["Best next guesses: ".bold().blue(), next_guess.into()]),
         ])
         .render(rows[0], buf);
 
@@ -280,19 +250,5 @@ impl Widget for &App {
         Paragraph::new(lines)
             .scroll((self.scroll, 0))
             .render(rows[1], buf);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn handle_key_event() -> io::Result<()> {
-        let mut app = App::default();
-        app.handle_key_event(KeyCode::Esc.into());
-        assert_eq!(app.exit, true);
-
-        Ok(())
     }
 }

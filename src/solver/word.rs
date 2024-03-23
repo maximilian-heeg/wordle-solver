@@ -1,7 +1,7 @@
-use crate::app::letter::*;
+use super::letter::*;
 use ratatui::prelude::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Word {
     pub letters: [Letter; 5],
 }
@@ -52,19 +52,6 @@ impl Word {
             .count()
     }
 
-    // fn count_letters(&self) -> HashMap<char, usize> {
-    //     let mut letter_map: HashMap<char, usize> = HashMap::new();
-    //     self.letters.iter().for_each(|letter| {
-    //         if let Some(char) = letter.letter {
-    //             letter_map
-    //                 .entry(char)
-    //                 .and_modify(|count| *count += 1)
-    //                 .or_insert(1);
-    //         }
-    //     });
-    //     letter_map
-    // }
-
     fn filter_letters(&self) -> Word {
         let mut word = *self;
         for i in 0..word.letters.len() {
@@ -77,8 +64,8 @@ impl Word {
         word
     }
 
-    pub fn compare(&self, guess: &Word) -> Vec<Status> {
-        let mut result = vec![Status::Absent; self.letters.len()];
+    pub fn compare(&self, guess: &Word) -> [Status; 5] {
+        let mut result = [Status::Absent; 5];
         let mut remaining: Vec<usize> = vec![];
 
         // Find all correct letters
@@ -110,7 +97,7 @@ impl Word {
         result
     }
 
-    pub fn keep_word(&self, guess: &Word) -> bool {
+    pub fn is_valid(&self, guess: &Word) -> bool {
         // let must_letters = guess.filter_letters().count_letters();
         // let word_letters: HashMap<char, usize> = self.count_letters();
 
@@ -220,8 +207,8 @@ mod tests {
     fn keep_word_correct_letter() -> io::Result<()> {
         let mut guess = create_word_from_string("slate");
         guess.letters[2].status = Status::Correct;
-        assert!(create_word_from_string("plate").keep_word(&guess));
-        assert!(!create_word_from_string("water").keep_word(&guess));
+        assert!(create_word_from_string("plate").is_valid(&guess));
+        assert!(!create_word_from_string("water").is_valid(&guess));
         Ok(())
     }
 
@@ -229,9 +216,9 @@ mod tests {
     fn keep_word_incorrect_letter() -> io::Result<()> {
         let mut guess = create_word_from_string("slate");
         guess.letters[2].status = Status::Absent;
-        assert!(!create_word_from_string("plate").keep_word(&guess));
-        assert!(!create_word_from_string("water").keep_word(&guess));
-        assert!(create_word_from_string("songs").keep_word(&guess));
+        assert!(!create_word_from_string("plate").is_valid(&guess));
+        assert!(!create_word_from_string("water").is_valid(&guess));
+        assert!(create_word_from_string("songs").is_valid(&guess));
         Ok(())
     }
 
@@ -240,8 +227,8 @@ mod tests {
         let mut guess = create_word_from_string("goose");
         guess.letters[2].status = Status::Absent;
         guess.letters[1].status = Status::Misplaced;
-        assert!(create_word_from_string("bacon").keep_word(&guess));
-        assert!(!create_word_from_string("bloom").keep_word(&guess));
+        assert!(create_word_from_string("bacon").is_valid(&guess));
+        assert!(!create_word_from_string("bloom").is_valid(&guess));
         Ok(())
     }
 
@@ -250,8 +237,8 @@ mod tests {
         let mut guess = create_word_from_string("bacon");
         guess.letters[4].status = Status::Correct;
         guess.letters[3].status = Status::Misplaced;
-        assert!(create_word_from_string("ronin").keep_word(&guess));
-        assert!(!create_word_from_string("resin").keep_word(&guess));
+        assert!(create_word_from_string("ronin").is_valid(&guess));
+        assert!(!create_word_from_string("resin").is_valid(&guess));
         Ok(())
     }
 
@@ -260,9 +247,9 @@ mod tests {
         let mut guess = create_word_from_string("feels");
         guess.letters[1].status = Status::Misplaced;
         guess.letters[2].status = Status::Misplaced;
-        assert!(create_word_from_string("agree").keep_word(&guess));
-        assert!(!create_word_from_string("resin").keep_word(&guess));
-        assert!(!create_word_from_string("brake").keep_word(&guess));
+        assert!(create_word_from_string("agree").is_valid(&guess));
+        assert!(!create_word_from_string("resin").is_valid(&guess));
+        assert!(!create_word_from_string("brake").is_valid(&guess));
         Ok(())
     }
 
@@ -274,7 +261,7 @@ mod tests {
         guess.letters[2].status = Status::Absent;
         guess.letters[3].status = Status::Absent;
         guess.letters[4].status = Status::Absent;
-        assert!(!create_word_from_string("reede").keep_word(&guess));
+        assert!(!create_word_from_string("reede").is_valid(&guess));
         Ok(())
     }
 
@@ -283,7 +270,7 @@ mod tests {
         let word = create_word_from_string("water");
 
         let guess = create_word_from_string("slate");
-        let expected = vec![
+        let expected = [
             Status::Absent,
             Status::Absent,
             Status::Misplaced,
@@ -293,7 +280,7 @@ mod tests {
         assert_eq!(word.compare(&guess), expected);
 
         let guess = create_word_from_string("eerie");
-        let expected = vec![
+        let expected = [
             Status::Misplaced,
             Status::Absent,
             Status::Misplaced,
@@ -303,7 +290,7 @@ mod tests {
         assert_eq!(word.compare(&guess), expected);
 
         let guess = create_word_from_string("eater");
-        let expected = vec![
+        let expected = [
             Status::Absent,
             Status::Correct,
             Status::Correct,
@@ -320,7 +307,7 @@ mod tests {
         let word = create_word_from_string("steer");
 
         let guess = create_word_from_string("slate");
-        let expected = vec![
+        let expected = [
             Status::Correct,
             Status::Absent,
             Status::Absent,
@@ -330,7 +317,7 @@ mod tests {
         assert_eq!(word.compare(&guess), expected);
 
         let guess = create_word_from_string("deers");
-        let expected = vec![
+        let expected = [
             Status::Absent,
             Status::Misplaced,
             Status::Correct,
