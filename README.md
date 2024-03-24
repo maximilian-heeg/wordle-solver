@@ -31,13 +31,15 @@
 ### Benchmark
 
 Results of `cargo run --release benchmark`:
-    
-    37 words could not be solved in 6 guesses:   doozy, dozed, goxes, 
+
+    37 words could not be solved in 6 guesses:   doozy, dozed, goxes,
        javas, jests, jills, jongs, kacks, kents, kinks, lills, mongs,
-       nexts, pents, sades, sangs, saxes, sings, soles, songs, vants, 
-       vells, vents, vests, veves, vexes, vills, vines, waxes, wexes, 
+       nexts, pents, sades, sangs, saxes, sings, soles, songs, vants,
+       vells, vents, vests, veves, vexes, vills, vines, waxes, wexes,
        wonks, wulls, yayas, zests, zexes, zezes, zills
-    
+
+    Out of these, all expect for `zills` can be solved in 7 steps. `zills` requires 8 attempts.
+
     The others have been solved in an average of 4.11 steps
     Here are the numbers for how many wordles have been solved in n steps.
     Steps 1: Count 1

@@ -2,6 +2,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use indicatif::ProgressIterator;
 use indicatif::ProgressStyle;
 use solver::letter::Status;
@@ -40,8 +41,11 @@ enum Commands {
     /// Benchmark against all words in file
     Benchmark {},
 
-    /// Get the best strategy to solve a word
-    Solve { word: String },
+    /// Get the best strategy to solve words
+    Solve {
+        /// The words to solve
+        words: Vec<String>,
+    },
 }
 
 fn create_word_from_string(word: &str) -> Word {
@@ -55,7 +59,10 @@ fn create_word_from_string(word: &str) -> Word {
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
-    println!("Initializing solver. This might take a while...");
+    println!(
+        "{}",
+        "Initializing solver. This might take a while...".blue()
+    );
     let mut solver = Solver::new(&args.word_file, args.cache_mode);
 
     match args.command {
@@ -63,9 +70,13 @@ fn main() -> io::Result<()> {
             benchmark(&mut solver, args.max_rounds);
             Ok(())
         }
-        Some(Commands::Solve { word }) => {
-            let word = create_word_from_string(&word);
-            try_to_solve(&word, &mut solver, args.max_rounds, true);
+        Some(Commands::Solve { words }) => {
+            for word in words {
+                let word = create_word_from_string(&word);
+                try_to_solve(&word, &mut solver, args.max_rounds, true);
+                solver.reset();
+            }
+
             Ok(())
         }
         Some(Commands::Tui {}) | None => {
@@ -142,7 +153,8 @@ fn benchmark(solver: &mut Solver, max_rounds: usize) {
 fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool) -> usize {
     let mut guesses: Vec<Word> = vec![];
     if print {
-        println!("Trying to solve {} in {} rounds", word, max_rounds)
+        println!("----- {} -------", format!("{word}").bold().blue());
+        println!("Trying to solve in {} rounds", max_rounds)
     };
 
     // Reset remaining words
@@ -150,28 +162,45 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
 
     for step in 1..(max_rounds + 1) {
         if print {
-            println!("... Step {}", step)
+            println!("Step {}", step.to_string().bold())
         };
         solver.update_remaining_words(&guesses);
         if print {
-            println!("... ... {} remaining words", solver.get_n_remaining_words())
+            println!(
+                "   {} remaining words",
+                solver.get_n_remaining_words().to_string().bold().blue()
+            )
         };
         if solver.get_n_remaining_words() == 1 {
             let next_guess = solver.guess(1)[0];
             if print {
-                println!("Solved after {} steps: {}", step, next_guess)
+                println!(
+                    "   {} is the only remaining word",
+                    format!("{next_guess}").blue()
+                );
+                println!(
+                    "{} after {} steps",
+                    "Solved".to_string().bold().green(),
+                    step.to_string().bold().blue()
+                );
+                println!("");
             };
             return step;
         }
         let mut next_guess = solver.guess(1)[0];
         if print {
-            println!("... ... next guess {}", next_guess)
+            println!("   next guess {}", format!("{next_guess}").blue())
         };
         let status = word.compare(&next_guess);
         if status.iter().all(|s| *s == Status::Correct) {
             // We guessed correctly, even if there have been mulipe solutions.
             if print {
-                println!("Solved after {} steps: {}", step, next_guess)
+                println!(
+                    "{} after {} steps",
+                    "Solved".to_string().bold().green(),
+                    step.to_string().bold().blue()
+                );
+                println!("");
             };
             return step;
         }
@@ -182,7 +211,22 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
         guesses.push(next_guess)
     }
     if print {
-        println!("Failed to solve after {} rounds", max_rounds)
+        println!(
+            "{} to solve after {} rounds",
+            "Failed".to_string().bold().red(),
+            max_rounds.to_string().bold().blue()
+        );
+        println!(
+            "Remaining words: {}",
+            solver
+                .get_remaining_words()
+                .iter()
+                .map(|w| format!("{w}"))
+                .collect::<Vec<String>>()
+                .join(", ")
+                .blue()
+        );
+        println!("");
     };
     0
 }
