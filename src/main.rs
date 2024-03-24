@@ -90,10 +90,15 @@ fn benchmark(solver: &mut Solver, max_rounds: usize) {
         .collect();
 
     let failed = steps.iter().filter(|&x| *x == (0_usize)).count();
-    let failes_idx: Vec<&usize> = steps.iter().filter(|&x| *x == (0_usize)).collect();
+    let failes_idx: Vec<usize> = steps
+        .iter()
+        .enumerate()
+        .filter(|(_, &x)| x == (0_usize))
+        .map(|(id, _)| id)
+        .collect();
     let failed_words = failes_idx
         .into_iter()
-        .map(|i| format!("{}", solver.words[*i]))
+        .map(|i| format!("{}", solver.words[i]))
         .collect::<Vec<String>>()
         .join(", ");
     println!(
