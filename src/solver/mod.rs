@@ -22,8 +22,8 @@ pub struct Solver {
     /// the value is a  hashmap.
     /// in this, each key is the combination of the letter status
     /// and the value is a vector of possible solutions
-    mappings: Vec<Vec<Vec<usize>>>,
-    remaining_mappings: Vec<Vec<Vec<usize>>>,
+    mappings: Vec<Vec<Vec<u16>>>,
+    remaining_mappings: Vec<Vec<Vec<u16>>>,
     last_guesses: Vec<Word>,
     cache_mode: CacheMode,
 }
@@ -33,6 +33,10 @@ pub struct Solver {
 pub enum CacheMode {
     Words,
     Guesses,
+}
+
+fn u16_from_usize(i: usize) -> u16 {
+    u16::try_from(i).expect("Too big to fit into u16")
 }
 
 impl Solver {
@@ -69,7 +73,7 @@ impl Solver {
 
         Solver {
             words: words.clone(),
-            remaining_words: (0..words.len()).collect(),
+            remaining_words: (0..(words.len())).collect(),
             mappings: mappings.clone(),
             remaining_mappings: mappings,
             last_guesses: vec![],
@@ -78,29 +82,29 @@ impl Solver {
     }
 
     pub fn reset(&mut self) {
-        self.remaining_words = (0..self.words.len()).collect();
+        self.remaining_words = (0..(self.words.len())).collect();
         self.remaining_mappings = self.mappings.clone();
     }
 
-    pub fn build_mappings(words: &Vec<Word>) -> Vec<Vec<Vec<usize>>> {
-        let hm: Vec<Vec<Vec<usize>>> = words
+    pub fn build_mappings(words: &Vec<Word>) -> Vec<Vec<Vec<u16>>> {
+        let hm: Vec<Vec<Vec<u16>>> = words
             .par_iter()
             .map(|word| Solver::get_possible_solutions_for_word(word, words))
             .collect();
         hm
     }
 
-    fn get_possible_solutions_for_word(word: &Word, all_words: &Vec<Word>) -> Vec<Vec<usize>> {
+    fn get_possible_solutions_for_word(word: &Word, all_words: &Vec<Word>) -> Vec<Vec<u16>> {
         let patterns: Vec<[Status; 5]> = all_words
             .par_iter()
             .map(|solution| solution.compare(word))
             .collect();
 
-        let mut hm: HashMap<[Status; 5], Vec<usize>> = HashMap::new();
+        let mut hm: HashMap<[Status; 5], Vec<u16>> = HashMap::new();
         patterns.iter().enumerate().for_each(|(i, code)| {
             hm.entry(*code)
-                .and_modify(|vec| vec.push(i))
-                .or_insert(vec![i]);
+                .and_modify(|vec| vec.push(u16_from_usize(i)))
+                .or_insert(vec![u16_from_usize(i)]);
         });
 
         hm.into_values().collect()
@@ -153,10 +157,10 @@ impl Solver {
             .collect();
 
         // if in words cache mode, check if the new remaining words are a subset of the old
-        if self.cache_mode == CacheMode::Words {
-            if !new_remaining_words.iter().all(|item| a_set.contains(item)) {
-                self.remaining_mappings = self.mappings.clone();
-            }
+        if self.cache_mode == CacheMode::Words
+            && !new_remaining_words.iter().all(|item| a_set.contains(item))
+        {
+            self.remaining_mappings = self.mappings.clone();
         }
         self.remaining_words = new_remaining_words;
 
@@ -170,7 +174,7 @@ impl Solver {
         self.remaining_mappings.par_iter_mut().for_each(|word| {
             word.retain(|x| !x.is_empty());
             word.iter_mut().for_each(|v| {
-                v.retain(|x| remaining_words_set.contains(x));
+                v.retain(|x| remaining_words_set.contains(&usize::from(*x)));
             });
         });
     }
@@ -265,7 +269,7 @@ mod tests {
 
         solver.update_mappings();
 
-        let should: Vec<Vec<Vec<usize>>> = vec![vec![vec![3], vec![3, 4]], vec![vec![3], vec![]]];
+        let should: Vec<Vec<Vec<u16>>> = vec![vec![vec![3], vec![3, 4]], vec![vec![3], vec![]]];
 
         assert_eq!(solver.remaining_mappings, should)
     }
