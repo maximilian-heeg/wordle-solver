@@ -1,12 +1,39 @@
-use std::io;
+use clap::{Parser, Subcommand};
+use indicatif::ProgressIterator;
+use indicatif::ProgressStyle;
+use std::{collections::HashMap, io};
 
-use solver::word::Word;
-
+use solver::{word::Word, Solver};
 mod app;
 mod solver;
 mod tui;
 
-fn _create_word_from_string(word: &str) -> Word {
+/// Wordle solver
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[command(subcommand)]
+    command: Option<Commands>,
+
+    /// File path to the possible solutions
+    #[arg(short, long, default_value = "data/words.txt")]
+    word_file: String,
+
+    /// Maximal number of rounds
+    #[arg(short, long, default_value_t = 6)]
+    max_rounds: usize,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Benchmark against all words in file
+    Benchmark {},
+
+    /// Get the best strategy to solve a word
+    Solve { word: String },
+}
+
+fn create_word_from_string(word: &str) -> Word {
     let mut res = Word::new();
     for (i, letter) in word.chars().enumerate() {
         res.set_letter(Some(letter), i);
@@ -15,8 +42,119 @@ fn _create_word_from_string(word: &str) -> Word {
 }
 
 fn main() -> io::Result<()> {
-    let mut terminal = tui::init()?;
-    let app_result = app::App::default().run(&mut terminal);
-    tui::restore()?;
-    app_result
+    let args = Args::parse();
+
+    println!("Initializing solver. This might take a while...");
+    let mut solver = Solver::new(&args.word_file);
+
+    match args.command {
+        Some(Commands::Benchmark {}) => {
+            benchmark(&mut solver, args.max_rounds);
+            Ok(())
+        }
+        Some(Commands::Solve { word }) => {
+            let word = create_word_from_string(&word);
+            try_to_solve(&word, &mut solver, args.max_rounds, true);
+            Ok(())
+        }
+        None => {
+            let mut terminal = tui::init()?;
+            let app_result = app::App::init(solver).run(&mut terminal);
+            tui::restore()?;
+            app_result
+        }
+    }
+}
+
+fn benchmark(solver: &mut Solver, max_rounds: usize) {
+    let words = solver.words.clone();
+    println!("Starting benchmark.");
+    let style =
+        ProgressStyle::with_template("{wide_bar} {pos:>7}/{len:7} [{eta_precise} remaining]")
+            .unwrap()
+            .progress_chars("##-");
+    let mut steps: Vec<usize> = words
+        .iter()
+        .progress_with_style(style)
+        .map(|word| try_to_solve(word, solver, max_rounds, false))
+        .collect();
+
+    let failed = steps.iter().filter(|&x| *x == (0_usize)).count();
+    let failes_idx: Vec<&usize> = steps.iter().filter(|&x| *x == (0_usize)).collect();
+    let failed_words = failes_idx
+        .into_iter()
+        .map(|i| format!("{}", solver.words[*i]))
+        .collect::<Vec<String>>()
+        .join(", ");
+    println!(
+        "{} words could not be solved in {} guesses: {}",
+        failed, max_rounds, failed_words
+    );
+
+    // Step 1: Remove all occurrences of 0 from the vector
+    steps.retain(|&x| x != 0);
+
+    // Step 2: Calculate the mean of the remaining values
+    let sum: usize = steps.iter().sum();
+    let mean: f64 = sum as f64 / steps.len() as f64;
+
+    // Step 3: Count the number of unique values
+    let mut counts: HashMap<usize, usize> = HashMap::new();
+    // Iterate through the vector and update counts
+    for &num in &steps {
+        *counts.entry(num).or_insert(0) += 1;
+    }
+
+    println!(
+        "The others have been solved in an average of {:.2} steps",
+        mean
+    );
+    // Print the counts for each unique value
+    println!("Here are the numbers for how many wordles haven in solved in n steps.");
+    // Get sorted keys
+    let mut sorted_keys: Vec<usize> = counts.keys().copied().collect();
+    sorted_keys.sort();
+
+    // Print the counts for each unique value in sorted order
+    for num in sorted_keys {
+        if let Some(count) = counts.get(&num) {
+            println!("Steps {}: Count {}", num, count);
+        }
+    }
+}
+
+fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool) -> usize {
+    let mut guesses: Vec<Word> = vec![];
+    if print {
+        println!("Trying to solve {} in {} rounds", word, max_rounds)
+    };
+
+    for step in 1..(max_rounds + 1) {
+        if print {
+            println!("... Step {}", step)
+        };
+        solver.update_remaining_words(&guesses);
+        if print {
+            println!("... ... {} remaining words", solver.get_n_remaining_words())
+        };
+        if solver.get_n_remaining_words() == 1 {
+            if print {
+                println!("Solved after {} steps", step)
+            };
+            return step;
+        }
+        let mut next_guess = solver.guess(1)[0];
+        if print {
+            println!("... ... next guess {}", next_guess)
+        };
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess)
+    }
+    if print {
+        println!("Failed to solve after {} rounds", max_rounds)
+    };
+    0
 }

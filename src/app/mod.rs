@@ -21,13 +21,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn default() -> Self {
+    pub fn init(solver: Solver) -> Self {
         App {
             exit: false,
             words: vec![Word::new()],
             selected_word: 0,
             selected_letter: 0,
-            solver: Solver::new(),
+            solver,
             scroll: 0,
         }
     }

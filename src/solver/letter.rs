@@ -18,6 +18,12 @@ pub struct Letter {
     pub status: Status,
 }
 
+impl Default for Letter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Letter {
     pub fn new() -> Self {
         Letter {

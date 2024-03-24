@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Solver {
     /// A Vector that contains all words
     pub words: Vec<Word>,
@@ -25,14 +25,12 @@ pub struct Solver {
     remaining_mappings: Vec<Vec<Vec<usize>>>,
 }
 
-static WORDLE_SOLUTIONS: &str = r"data/words.txt";
-
 impl Solver {
-    pub fn new() -> Self {
+    pub fn new(filepath: &str) -> Self {
         // Vector to store parsed words
         let mut words: Vec<Word> = Vec::new();
 
-        let file = match File::open(WORDLE_SOLUTIONS) {
+        let file = match File::open(filepath) {
             Ok(file) => file,
             Err(why) => panic!("Couldn't open file: {}", why),
         };

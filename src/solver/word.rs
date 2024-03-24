@@ -6,6 +6,12 @@ pub struct Word {
     pub letters: [Letter; 5],
 }
 
+impl Default for Word {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Word {
     pub fn new() -> Self {
         let letter = Letter::new();
