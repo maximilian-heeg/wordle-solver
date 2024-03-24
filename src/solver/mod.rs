@@ -28,7 +28,7 @@ pub struct Solver {
     cache_mode: CacheMode,
 }
 
-#[derive(Debug, Clone, PartialEq, clap::ValueEnum)] // ArgEnum here
+#[derive(Debug, Clone, PartialEq, clap::ValueEnum)]
 #[clap(rename_all = "kebab_case")]
 pub enum CacheMode {
     Words,
@@ -138,7 +138,10 @@ impl Solver {
             self.last_guesses = guesses.to_vec();
         }
 
+        // if in words cache mode, create a hashset
+        let mut a_set: HashSet<usize> = HashSet::new();
         if self.cache_mode == CacheMode::Words {
+            a_set = self.remaining_words.iter().copied().collect();
             self.remaining_words = (0..self.words.len()).collect();
         }
 
@@ -149,9 +152,8 @@ impl Solver {
             .map(|x| *x)
             .collect();
 
-        // if in tui mode, check if the new remaining words are a subset of the old
+        // if in words cache mode, check if the new remaining words are a subset of the old
         if self.cache_mode == CacheMode::Words {
-            let a_set: HashSet<_> = self.remaining_words.iter().copied().collect();
             if !new_remaining_words.iter().all(|item| a_set.contains(item)) {
                 self.remaining_mappings = self.mappings.clone();
             }
@@ -227,4 +229,60 @@ impl Solver {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+
+    use super::*;
+
+    fn create_word_from_string(word: &str) -> Word {
+        let mut res = Word::new();
+        for (i, letter) in word.chars().enumerate() {
+            res.set_letter(Some(letter), i);
+        }
+        res
+    }
+
+    #[test]
+    fn test_build_mappings() {
+        let solver = Solver::new("data/test.txt", super::CacheMode::Words);
+
+        let lengths: Vec<usize> = solver.mappings.iter().map(|x| x.len()).collect();
+
+        let should = vec![5, 4, 4, 5, 5];
+
+        assert_eq!(lengths, should)
+    }
+
+    #[test]
+    fn test_update_mappings() {
+        let mut solver = Solver::new("data/test.txt", super::CacheMode::Words);
+
+        solver.remaining_words = vec![3, 4];
+
+        solver.remaining_mappings = vec![
+            vec![vec![1, 2, 3], vec![3, 4, 5]],
+            vec![vec![3], vec![1, 2, 5]],
+        ];
+
+        solver.update_mappings();
+
+        let should: Vec<Vec<Vec<usize>>> = vec![vec![vec![3], vec![3, 4]], vec![vec![3], vec![]]];
+
+        assert_eq!(solver.remaining_mappings, should)
+    }
+
+    #[test]
+    fn test_update_remaining_words() {
+        let mut solver = Solver::new("data/test.txt", super::CacheMode::Words);
+
+        let mut guess = create_word_from_string("sport");
+        guess.letters[0].status = Status::Misplaced;
+        guess.letters[1].status = Status::Absent;
+        guess.letters[2].status = Status::Absent;
+        guess.letters[3].status = Status::Misplaced;
+        guess.letters[4].status = Status::Misplaced;
+
+        solver.update_remaining_words(&[guess]);
+
+        assert_eq!(solver.remaining_words, vec![3])
+    }
+}

@@ -4,6 +4,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use clap::{Parser, Subcommand};
 use indicatif::ProgressIterator;
 use indicatif::ProgressStyle;
+use solver::letter::Status;
 use std::{collections::HashMap, io};
 
 use solver::{word::Word, Solver};
@@ -167,6 +168,14 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
             println!("... ... next guess {}", next_guess)
         };
         let status = word.compare(&next_guess);
+        if status.iter().all(|s| *s == Status::Correct) {
+            // We guessed correctly, even if there have been mulipe solutions.
+            if print {
+                println!("Solved after {} steps: {}", step, next_guess)
+            };
+            return step;
+        }
+
         for (i, s) in status.iter().enumerate() {
             next_guess.letters[i].status = *s;
         }
