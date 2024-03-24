@@ -172,10 +172,10 @@ impl Solver {
             self.remaining_words.iter().cloned().collect();
 
         self.remaining_mappings.par_iter_mut().for_each(|word| {
-            word.retain(|x| !x.is_empty());
             word.iter_mut().for_each(|v| {
                 v.retain(|x| remaining_words_set.contains(&usize::from(*x)));
             });
+            word.retain(|x| !x.is_empty());
         });
     }
 
@@ -269,7 +269,7 @@ mod tests {
 
         solver.update_mappings();
 
-        let should: Vec<Vec<Vec<u16>>> = vec![vec![vec![3], vec![3, 4]], vec![vec![3], vec![]]];
+        let should: Vec<Vec<Vec<u16>>> = vec![vec![vec![3], vec![3, 4]], vec![vec![3]]];
 
         assert_eq!(solver.remaining_mappings, should)
     }

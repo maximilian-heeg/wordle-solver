@@ -126,7 +126,7 @@ fn benchmark(solver: &mut Solver, max_rounds: usize) {
         mean
     );
     // Print the counts for each unique value
-    println!("Here are the numbers for how many wordles haven in solved in n steps.");
+    println!("Here are the numbers for how many wordles have been solved in n steps.");
     // Get sorted keys
     let mut sorted_keys: Vec<usize> = counts.keys().copied().collect();
     sorted_keys.sort();
