@@ -1,10 +1,10 @@
 pub mod letter;
 pub mod word;
 
-use itertools::Itertools;
 use letter::*;
 use word::Word;
 
+use itertools::Itertools;
 use rayon::prelude::*;
 
 use std::collections::{HashMap, HashSet};
@@ -25,17 +25,18 @@ pub struct Solver {
     mappings: Vec<Vec<Vec<usize>>>,
     remaining_mappings: Vec<Vec<Vec<usize>>>,
     last_guesses: Vec<Word>,
-    mode: Mode,
+    cache_mode: CacheMode,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Mode {
-    Tui,
-    Cli,
+#[derive(Debug, Clone, PartialEq, clap::ValueEnum)] // ArgEnum here
+#[clap(rename_all = "kebab_case")]
+pub enum CacheMode {
+    Words,
+    Guesses,
 }
 
 impl Solver {
-    pub fn new(filepath: &str, mode: Mode) -> Self {
+    pub fn new(filepath: &str, cache_mode: CacheMode) -> Self {
         // Vector to store parsed words
         let mut words: Vec<Word> = Vec::new();
 
@@ -72,8 +73,13 @@ impl Solver {
             mappings: mappings.clone(),
             remaining_mappings: mappings,
             last_guesses: vec![],
-            mode,
+            cache_mode,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.remaining_words = (0..self.words.len()).collect();
+        self.remaining_mappings = self.mappings.clone();
     }
 
     pub fn build_mappings(words: &Vec<Word>) -> Vec<Vec<Vec<usize>>> {
@@ -119,7 +125,7 @@ impl Solver {
     }
 
     pub fn update_remaining_words(&mut self, guesses: &[Word]) {
-        if self.mode == Mode::Cli {
+        if self.cache_mode == CacheMode::Guesses {
             // are the old guesses a subset of the new guesses?
             if !self
                 .last_guesses
@@ -127,13 +133,12 @@ impl Solver {
                 .all(|old| guesses.iter().contains(old))
             {
                 // reset remaing words and mappging
-                self.remaining_words = (0..self.words.len()).collect();
-                self.remaining_mappings = self.mappings.clone();
+                self.reset()
             }
             self.last_guesses = guesses.to_vec();
         }
 
-        if self.mode == Mode::Tui {
+        if self.cache_mode == CacheMode::Words {
             self.remaining_words = (0..self.words.len()).collect();
         }
 
@@ -145,7 +150,7 @@ impl Solver {
             .collect();
 
         // if in tui mode, check if the new remaining words are a subset of the old
-        if self.mode == Mode::Tui {
+        if self.cache_mode == CacheMode::Words {
             let a_set: HashSet<_> = self.remaining_words.iter().copied().collect();
             if !new_remaining_words.iter().all(|item| a_set.contains(item)) {
                 self.remaining_mappings = self.mappings.clone();

@@ -2,10 +2,10 @@
 
 ### Run
 
-- `cargp run --release` for TUI
-- `cargp run --release benchmark` for testing all words in the dictionary
-- `cargp run --release solve water` get the steps to sovle for the word "water"
-- `cargp run --release -- -m 4 solve water` get the steps to sovle for the word "water". limit to 4 steps
+- `cargo run --release` for TUI
+- `cargo run --release benchmark` for testing all words in the dictionary
+- `cargo run --release solve water` get the steps to sovle for the word "water"
+- `cargo run --release -- -m 4 solve water` get the steps to sovle for the word "water". limit to 4 steps
 
 ### Commands
 

@@ -22,10 +22,17 @@ struct Args {
     /// Maximal number of rounds
     #[arg(short, long, default_value_t = 6)]
     max_rounds: usize,
+
+    /// Cache mode
+    #[arg(long, default_value = "words")]
+    cache_mode: solver::CacheMode,
 }
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Default. Launch with graphical interface
+    Tui {},
+
     /// Benchmark against all words in file
     Benchmark {},
 
@@ -44,23 +51,20 @@ fn create_word_from_string(word: &str) -> Word {
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
+    println!("Initializing solver. This might take a while...");
+    let mut solver = Solver::new(&args.word_file, args.cache_mode);
+
     match args.command {
         Some(Commands::Benchmark {}) => {
-            println!("Initializing solver. This might take a while...");
-            let mut solver = Solver::new(&args.word_file, solver::Mode::Cli);
             benchmark(&mut solver, args.max_rounds);
             Ok(())
         }
         Some(Commands::Solve { word }) => {
-            println!("Initializing solver. This might take a while...");
-            let mut solver = Solver::new(&args.word_file, solver::Mode::Cli);
             let word = create_word_from_string(&word);
             try_to_solve(&word, &mut solver, args.max_rounds, true);
             Ok(())
         }
-        None => {
-            println!("Initializing solver. This might take a while...");
-            let solver = Solver::new(&args.word_file, solver::Mode::Tui);
+        Some(Commands::Tui {}) | None => {
             let mut terminal = tui::init()?;
             let app_result = app::App::init(solver).run(&mut terminal);
             tui::restore()?;
@@ -132,6 +136,9 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
         println!("Trying to solve {} in {} rounds", word, max_rounds)
     };
 
+    // Reset remaining words
+    solver.reset();
+
     for step in 1..(max_rounds + 1) {
         if print {
             println!("... Step {}", step)
@@ -170,9 +177,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_solver_cli() -> io::Result<()> {
+    fn test_solver_word_cache() -> io::Result<()> {
         let word = create_word_from_string("plaid");
-        let mut solver = Solver::new("data/words.txt", solver::Mode::Cli);
+        let mut solver = Solver::new("data/words.txt", solver::CacheMode::Words);
 
         let mut guesses: Vec<Word> = vec![];
         let mut next_guess = solver.guess(1)[0];
@@ -208,9 +215,9 @@ mod tests {
     }
 
     #[test]
-    fn test_solver_tui() -> io::Result<()> {
+    fn test_solver_guesses_cache() -> io::Result<()> {
         let word = create_word_from_string("sport");
-        let mut solver = Solver::new("data/words.txt", solver::Mode::Tui);
+        let mut solver = Solver::new("data/words.txt", solver::CacheMode::Guesses);
 
         let mut guesses: Vec<Word> = vec![];
         let mut next_guess = solver.guess(1)[0];
