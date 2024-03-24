@@ -1,7 +1,7 @@
 use super::letter::*;
 use ratatui::prelude::*;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Word {
     pub letters: [Letter; 5],
 }

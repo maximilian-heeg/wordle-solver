@@ -12,7 +12,7 @@ pub enum Status {
     Correct,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Letter {
     pub letter: Option<char>,
     pub status: Status,

@@ -1,12 +1,13 @@
 pub mod letter;
 pub mod word;
 
+use itertools::Itertools;
 use letter::*;
 use word::Word;
 
 use rayon::prelude::*;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 
@@ -23,10 +24,18 @@ pub struct Solver {
     /// and the value is a vector of possible solutions
     mappings: Vec<Vec<Vec<usize>>>,
     remaining_mappings: Vec<Vec<Vec<usize>>>,
+    last_guesses: Vec<Word>,
+    mode: Mode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Mode {
+    Tui,
+    Cli,
 }
 
 impl Solver {
-    pub fn new(filepath: &str) -> Self {
+    pub fn new(filepath: &str, mode: Mode) -> Self {
         // Vector to store parsed words
         let mut words: Vec<Word> = Vec::new();
 
@@ -62,6 +71,8 @@ impl Solver {
             remaining_words: (0..words.len()).collect(),
             mappings: mappings.clone(),
             remaining_mappings: mappings,
+            last_guesses: vec![],
+            mode,
         }
     }
 
@@ -108,23 +119,49 @@ impl Solver {
     }
 
     pub fn update_remaining_words(&mut self, guesses: &[Word]) {
-        let remaining_words: Vec<usize> = self
-            .words
+        if self.mode == Mode::Cli {
+            // are the old guesses a subset of the new guesses?
+            if !self
+                .last_guesses
+                .iter()
+                .all(|old| guesses.iter().contains(old))
+            {
+                // reset remaing words and mappging
+                self.remaining_words = (0..self.words.len()).collect();
+                self.remaining_mappings = self.mappings.clone();
+            }
+            self.last_guesses = guesses.to_vec();
+        }
+
+        if self.mode == Mode::Tui {
+            self.remaining_words = (0..self.words.len()).collect();
+        }
+
+        let new_remaining_words: Vec<usize> = self
+            .remaining_words
             .par_iter()
-            .enumerate()
-            .filter(|(_, word)| Solver::keep_word(word, guesses))
-            .map(|(key, _)| key)
+            .filter(|&id| Solver::keep_word(&self.words[*id], guesses))
+            .map(|x| *x)
             .collect();
 
-        self.remaining_words = remaining_words;
+        // if in tui mode, check if the new remaining words are a subset of the old
+        if self.mode == Mode::Tui {
+            let a_set: HashSet<_> = self.remaining_words.iter().copied().collect();
+            if !new_remaining_words.iter().all(|item| a_set.contains(item)) {
+                self.remaining_mappings = self.mappings.clone();
+            }
+        }
+        self.remaining_words = new_remaining_words;
+
         self.update_mappings();
     }
 
     fn update_mappings(&mut self) {
         let remaining_words_set: std::collections::HashSet<_> =
             self.remaining_words.iter().cloned().collect();
-        self.remaining_mappings = self.mappings.clone();
+
         self.remaining_mappings.par_iter_mut().for_each(|word| {
+            word.retain(|x| !x.is_empty());
             word.iter_mut().for_each(|v| {
                 v.retain(|x| remaining_words_set.contains(x));
             });

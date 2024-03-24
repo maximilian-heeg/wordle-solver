@@ -44,20 +44,23 @@ fn create_word_from_string(word: &str) -> Word {
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
-    println!("Initializing solver. This might take a while...");
-    let mut solver = Solver::new(&args.word_file);
-
     match args.command {
         Some(Commands::Benchmark {}) => {
+            println!("Initializing solver. This might take a while...");
+            let mut solver = Solver::new(&args.word_file, solver::Mode::Cli);
             benchmark(&mut solver, args.max_rounds);
             Ok(())
         }
         Some(Commands::Solve { word }) => {
+            println!("Initializing solver. This might take a while...");
+            let mut solver = Solver::new(&args.word_file, solver::Mode::Cli);
             let word = create_word_from_string(&word);
             try_to_solve(&word, &mut solver, args.max_rounds, true);
             Ok(())
         }
         None => {
+            println!("Initializing solver. This might take a while...");
+            let solver = Solver::new(&args.word_file, solver::Mode::Tui);
             let mut terminal = tui::init()?;
             let app_result = app::App::init(solver).run(&mut terminal);
             tui::restore()?;
@@ -138,8 +141,9 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
             println!("... ... {} remaining words", solver.get_n_remaining_words())
         };
         if solver.get_n_remaining_words() == 1 {
+            let next_guess = solver.guess(1)[0];
             if print {
-                println!("Solved after {} steps", step)
+                println!("Solved after {} steps: {}", step, next_guess)
             };
             return step;
         }
@@ -157,4 +161,77 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
         println!("Failed to solve after {} rounds", max_rounds)
     };
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use super::*;
+
+    #[test]
+    fn test_solver_cli() -> io::Result<()> {
+        let word = create_word_from_string("plaid");
+        let mut solver = Solver::new("data/words.txt", solver::Mode::Cli);
+
+        let mut guesses: Vec<Word> = vec![];
+        let mut next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "tares");
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess);
+        solver.update_remaining_words(&guesses);
+        let mut next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "colin");
+
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess);
+        solver.update_remaining_words(&guesses);
+        let mut next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "plaga");
+
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess);
+        solver.update_remaining_words(&guesses);
+        let next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "plaid");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_solver_tui() -> io::Result<()> {
+        let word = create_word_from_string("sport");
+        let mut solver = Solver::new("data/words.txt", solver::Mode::Tui);
+
+        let mut guesses: Vec<Word> = vec![];
+        let mut next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "tares");
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess);
+        solver.update_remaining_words(&guesses);
+        let mut next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "spout");
+
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess);
+        solver.update_remaining_words(&guesses);
+        let next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "sport");
+        Ok(())
+    }
 }
