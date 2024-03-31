@@ -21,8 +21,8 @@ struct Args {
     command: Option<Commands>,
 
     /// File path to the possible solutions
-    #[arg(short, long, default_value = "data/words.txt")]
-    word_file: String,
+    #[arg(short, long)]
+    word_file: Option<String>,
 
     /// Maximal number of rounds
     #[arg(short, long, default_value_t = 6)]
@@ -63,7 +63,7 @@ fn main() -> io::Result<()> {
         "{}",
         "Initializing solver. This might take a while...".blue()
     );
-    let mut solver = Solver::new(&args.word_file, args.cache_mode);
+    let mut solver = Solver::new(args.word_file.as_deref(), args.cache_mode);
 
     match args.command {
         Some(Commands::Benchmark {}) => {
@@ -183,7 +183,7 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
                     "Solved".to_string().bold().green(),
                     step.to_string().bold().blue()
                 );
-                println!("");
+                println!();
             };
             return step;
         }
@@ -200,7 +200,7 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
                     "Solved".to_string().bold().green(),
                     step.to_string().bold().blue()
                 );
-                println!("");
+                println!();
             };
             return step;
         }
@@ -226,7 +226,7 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
                 .join(", ")
                 .blue()
         );
-        println!("");
+        println!();
     };
     0
 }
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn test_solver_word_cache() -> io::Result<()> {
         let word = create_word_from_string("plaid");
-        let mut solver = Solver::new("data/words.txt", solver::CacheMode::Words);
+        let mut solver = Solver::new(Some("data/words.txt"), solver::CacheMode::Words);
 
         let mut guesses: Vec<Word> = vec![];
         let mut next_guess = solver.guess(1)[0];
@@ -278,7 +278,35 @@ mod tests {
     #[test]
     fn test_solver_guesses_cache() -> io::Result<()> {
         let word = create_word_from_string("sport");
-        let mut solver = Solver::new("data/words.txt", solver::CacheMode::Guesses);
+        let mut solver = Solver::new(Some("data/words.txt"), solver::CacheMode::Guesses);
+
+        let mut guesses: Vec<Word> = vec![];
+        let mut next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "tares");
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess);
+        solver.update_remaining_words(&guesses);
+        let mut next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "spout");
+
+        let status = word.compare(&next_guess);
+        for (i, s) in status.iter().enumerate() {
+            next_guess.letters[i].status = *s;
+        }
+        guesses.push(next_guess);
+        solver.update_remaining_words(&guesses);
+        let next_guess = solver.guess(1)[0];
+        assert_eq!(format!("{}", next_guess), "sport");
+        Ok(())
+    }
+
+    #[test]
+    fn test_solver_guesses_embedded() -> io::Result<()> {
+        let word = create_word_from_string("sport");
+        let mut solver = Solver::new(None, solver::CacheMode::Guesses);
 
         let mut guesses: Vec<Word> = vec![];
         let mut next_guess = solver.guess(1)[0];

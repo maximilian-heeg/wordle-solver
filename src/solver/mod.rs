@@ -38,18 +38,22 @@ pub enum CacheMode {
 fn u16_from_usize(i: usize) -> u16 {
     u16::try_from(i).expect("Too big to fit into u16")
 }
+const WORDS: &[u8; 89130] = include_bytes!("../../data/words.txt");
 
 impl Solver {
-    pub fn new(filepath: &str, cache_mode: CacheMode) -> Self {
+    pub fn new(filepath: Option<&str>, cache_mode: CacheMode) -> Self {
         // Vector to store parsed words
         let mut words: Vec<Word> = Vec::new();
 
-        let file = match File::open(filepath) {
-            Ok(file) => file,
-            Err(why) => panic!("Couldn't open file: {}", why),
+        let reader: Box<dyn std::io::BufRead> = if let Some(path) = filepath {
+            let file = match File::open(path) {
+                Ok(file) => file,
+                Err(why) => panic!("Couldn't open file: {}", why),
+            };
+            Box::new(BufReader::new(file))
+        } else {
+            Box::new(BufReader::new(&WORDS[..]))
         };
-
-        let reader = BufReader::new(file);
 
         for line in reader.lines() {
             let line = line.expect("Error reading line");
@@ -247,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_build_mappings() {
-        let solver = Solver::new("data/test.txt", super::CacheMode::Words);
+        let solver = Solver::new(Some("data/test.txt"), super::CacheMode::Words);
 
         let lengths: Vec<usize> = solver.mappings.iter().map(|x| x.len()).collect();
 
@@ -257,8 +261,19 @@ mod tests {
     }
 
     #[test]
+    fn test_build_mappings_2() {
+        let solver = Solver::new(Some("data/words.txt"), super::CacheMode::Words);
+
+        let lengths: Vec<usize> = solver.mappings.iter().map(|x| x.len()).collect();
+
+        let should = vec![142, 132, 127, 161, 130];
+
+        assert_eq!(lengths[1000..1005], should)
+    }
+
+    #[test]
     fn test_update_mappings() {
-        let mut solver = Solver::new("data/test.txt", super::CacheMode::Words);
+        let mut solver = Solver::new(Some("data/test.txt"), super::CacheMode::Words);
 
         solver.remaining_words = vec![3, 4];
 
@@ -276,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_update_remaining_words() {
-        let mut solver = Solver::new("data/test.txt", super::CacheMode::Words);
+        let mut solver = Solver::new(Some("data/test.txt"), super::CacheMode::Words);
 
         let mut guess = create_word_from_string("sport");
         guess.letters[0].status = Status::Misplaced;
