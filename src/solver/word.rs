@@ -1,5 +1,4 @@
 use super::letter::*;
-use ratatui::prelude::*;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Word {
@@ -22,23 +21,6 @@ impl Word {
 
     pub fn set_letter(&mut self, letter: Option<char>, position: usize) {
         self.letters[position].set(letter);
-    }
-
-    pub fn render(&self, area: Rect, buf: &mut Buffer, selected_letter: Option<usize>) {
-        let row_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Length(7); 5])
-            .flex(layout::Flex::Center)
-            .split(area);
-        for i in 0..5 {
-            let selected = match selected_letter {
-                // Check if the current position needs to be highlighted
-                Some(position) if position == i => true,
-                // All other cases
-                _ => false,
-            };
-            self.letters[i].render(row_layout[i], buf, selected)
-        }
     }
 
     fn has_letter_at_position(&self, test: char, pos: usize) -> bool {
