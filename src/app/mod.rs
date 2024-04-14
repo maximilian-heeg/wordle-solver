@@ -223,28 +223,25 @@ impl Widget for &App {
         // Plot Header
         let rows = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(5), Constraint::Fill(1)])
+            .constraints([Constraint::Length(12), Constraint::Fill(1)])
             .split(columns[1]);
 
         // next guess
+        let mut lines: Vec<Line<'_>> = vec![Line::from(vec!["Best next guesses: ".bold().blue()])];
         let next_guess = self
             .solver
-            .guess(3)
+            .guess(10)
             .into_iter()
-            .map(|g| format!("{g}"))
-            .collect::<Vec<String>>()
-            .join(", ");
-        Paragraph::new(vec![
-            Line::from(vec![
-                "Possible solutions: ".bold().blue(),
-                self.solver.get_n_remaining_words().to_string().into(),
-            ]),
-            Line::from(vec!["Best next guesses: ".bold().blue(), next_guess.into()]),
-        ])
-        .render(rows[0], buf);
+            .map(|(g, n)| format!(" {g} ({n} groups)").into())
+            .collect::<Vec<Line<'_>>>();
+        lines.extend(next_guess);
+        Paragraph::new(lines).render(rows[0], buf);
 
         // Plot all solutions
-        let mut lines: Vec<Line<'_>> = vec![];
+        let mut lines: Vec<Line<'_>> = vec![Line::from(vec![
+            "Possible words: ".bold().blue(),
+            self.solver.get_n_remaining_words().to_string().into(),
+        ])];
         let solutions = self.solver.get_remaining_words();
         for item in solutions {
             lines.push(format!("{}", item).into())

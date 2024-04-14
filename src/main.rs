@@ -20,6 +20,11 @@ struct Args {
     #[command(subcommand)]
     command: Option<Commands>,
 
+    /// No not restrict the possible answers to the
+    /// most common words
+    #[arg(short, long)]
+    no_restriction: bool,
+
     /// File path to the possible solutions
     #[arg(short, long)]
     word_file: Option<String>,
@@ -63,7 +68,11 @@ fn main() -> io::Result<()> {
         "{}",
         "Initializing solver. This might take a while...".blue()
     );
-    let mut solver = Solver::new(args.word_file.as_deref(), args.cache_mode);
+    let mut solver = Solver::new(
+        args.word_file.as_deref(),
+        !args.no_restriction,
+        args.cache_mode,
+    );
 
     match args.command {
         Some(Commands::Benchmark {}) => {
@@ -89,7 +98,13 @@ fn main() -> io::Result<()> {
 }
 
 fn benchmark(solver: &mut Solver, max_rounds: usize) {
-    let words = solver.words.clone();
+    let words: Vec<Word> = solver
+        .answers
+        .clone()
+        .iter()
+        .map(|id| solver.words[*id])
+        .collect();
+
     println!("Starting benchmark.");
     let style =
         ProgressStyle::with_template("{wide_bar} {pos:>7}/{len:7} [{eta_precise} remaining]")
@@ -176,7 +191,7 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
             if print {
                 println!(
                     "   {} is the only remaining word",
-                    format!("{next_guess}").blue()
+                    format!("{}", next_guess.0).blue()
                 );
                 println!(
                     "{} after {} steps",
@@ -189,9 +204,9 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
         }
         let mut next_guess = solver.guess(1)[0];
         if print {
-            println!("   next guess {}", format!("{next_guess}").blue())
+            println!("   next guess {}", format!("{}", next_guess.0).blue())
         };
-        let status = word.compare(&next_guess);
+        let status = word.compare(&next_guess.0);
         if status.iter().all(|s| *s == Status::Correct) {
             // We guessed correctly, even if there have been mulipe solutions.
             if print {
@@ -206,9 +221,9 @@ fn try_to_solve(word: &Word, solver: &mut Solver, max_rounds: usize, print: bool
         }
 
         for (i, s) in status.iter().enumerate() {
-            next_guess.letters[i].status = *s;
+            next_guess.0.letters[i].status = *s;
         }
-        guesses.push(next_guess)
+        guesses.push(next_guess.0)
     }
     if print {
         println!(
@@ -240,37 +255,37 @@ mod tests {
     #[test]
     fn test_solver_word_cache() -> io::Result<()> {
         let word = create_word_from_string("plaid");
-        let mut solver = Solver::new(Some("data/words.txt"), solver::CacheMode::Words);
+        let mut solver = Solver::new(Some("data/words.txt"), false, solver::CacheMode::Words);
 
         let mut guesses: Vec<Word> = vec![];
         let mut next_guess = solver.guess(1)[0];
-        assert_eq!(format!("{}", next_guess), "tares");
-        let status = word.compare(&next_guess);
+        assert_eq!(format!("{}", next_guess.0), "tares");
+        let status = word.compare(&next_guess.0);
         for (i, s) in status.iter().enumerate() {
-            next_guess.letters[i].status = *s;
+            next_guess.0.letters[i].status = *s;
         }
-        guesses.push(next_guess);
+        guesses.push(next_guess.0);
         solver.update_remaining_words(&guesses);
         let mut next_guess = solver.guess(1)[0];
-        assert_eq!(format!("{}", next_guess), "colin");
+        assert_eq!(format!("{}", next_guess.0), "colin");
 
-        let status = word.compare(&next_guess);
+        let status = word.compare(&next_guess.0);
         for (i, s) in status.iter().enumerate() {
-            next_guess.letters[i].status = *s;
+            next_guess.0.letters[i].status = *s;
         }
-        guesses.push(next_guess);
+        guesses.push(next_guess.0);
         solver.update_remaining_words(&guesses);
         let mut next_guess = solver.guess(1)[0];
-        assert_eq!(format!("{}", next_guess), "plaga");
+        assert_eq!(format!("{}", next_guess.0), "plaga");
 
-        let status = word.compare(&next_guess);
+        let status = word.compare(&next_guess.0);
         for (i, s) in status.iter().enumerate() {
-            next_guess.letters[i].status = *s;
+            next_guess.0.letters[i].status = *s;
         }
-        guesses.push(next_guess);
+        guesses.push(next_guess.0);
         solver.update_remaining_words(&guesses);
         let next_guess = solver.guess(1)[0];
-        assert_eq!(format!("{}", next_guess), "plaid");
+        assert_eq!(format!("{}", next_guess.0), "plaid");
 
         Ok(())
     }
@@ -278,10 +293,10 @@ mod tests {
     #[test]
     fn test_solver_guesses_cache() -> io::Result<()> {
         let word = create_word_from_string("sport");
-        let mut solver = Solver::new(Some("data/words.txt"), solver::CacheMode::Guesses);
+        let mut solver = Solver::new(Some("data/words.txt"), false, solver::CacheMode::Guesses);
 
         let mut guesses: Vec<Word> = vec![];
-        let mut next_guess = solver.guess(1)[0];
+        let mut next_guess = solver.guess(1)[0].0;
         assert_eq!(format!("{}", next_guess), "tares");
         let status = word.compare(&next_guess);
         for (i, s) in status.iter().enumerate() {
@@ -289,7 +304,7 @@ mod tests {
         }
         guesses.push(next_guess);
         solver.update_remaining_words(&guesses);
-        let mut next_guess = solver.guess(1)[0];
+        let mut next_guess = solver.guess(1)[0].0;
         assert_eq!(format!("{}", next_guess), "spout");
 
         let status = word.compare(&next_guess);
@@ -298,7 +313,7 @@ mod tests {
         }
         guesses.push(next_guess);
         solver.update_remaining_words(&guesses);
-        let next_guess = solver.guess(1)[0];
+        let next_guess = solver.guess(1)[0].0;
         assert_eq!(format!("{}", next_guess), "sport");
         Ok(())
     }
@@ -306,10 +321,10 @@ mod tests {
     #[test]
     fn test_solver_guesses_embedded() -> io::Result<()> {
         let word = create_word_from_string("sport");
-        let mut solver = Solver::new(None, solver::CacheMode::Guesses);
+        let mut solver = Solver::new(None, false, solver::CacheMode::Guesses);
 
         let mut guesses: Vec<Word> = vec![];
-        let mut next_guess = solver.guess(1)[0];
+        let mut next_guess = solver.guess(1)[0].0;
         assert_eq!(format!("{}", next_guess), "tares");
         let status = word.compare(&next_guess);
         for (i, s) in status.iter().enumerate() {
@@ -317,7 +332,7 @@ mod tests {
         }
         guesses.push(next_guess);
         solver.update_remaining_words(&guesses);
-        let mut next_guess = solver.guess(1)[0];
+        let mut next_guess = solver.guess(1)[0].0;
         assert_eq!(format!("{}", next_guess), "spout");
 
         let status = word.compare(&next_guess);
@@ -326,7 +341,7 @@ mod tests {
         }
         guesses.push(next_guess);
         solver.update_remaining_words(&guesses);
-        let next_guess = solver.guess(1)[0];
+        let next_guess = solver.guess(1)[0].0;
         assert_eq!(format!("{}", next_guess), "sport");
         Ok(())
     }

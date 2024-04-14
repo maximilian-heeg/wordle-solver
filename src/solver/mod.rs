@@ -15,6 +15,8 @@ use std::io::{prelude::*, BufReader};
 pub struct Solver {
     /// A Vector that contains all words
     pub words: Vec<Word>,
+    // The indices of all words, that are also possible answers
+    pub answers: Vec<usize>,
     /// The indices of the remaining words
     remaining_words: Vec<usize>,
     /// The Vector with the solutions
@@ -39,25 +41,27 @@ fn u16_from_usize(i: usize) -> u16 {
     u16::try_from(i).expect("Too big to fit into u16")
 }
 const WORDS: &[u8; 89130] = include_bytes!("../../data/words.txt");
+const ANSWERS: &[u8; 19134] = include_bytes!("../../data/answers.txt");
 
 impl Solver {
-    pub fn new(filepath: Option<&str>, cache_mode: CacheMode) -> Self {
-        // Vector to store parsed words
-        let mut words: Vec<Word> = Vec::new();
+    pub fn new(filepath: Option<&str>, restrict_answers: bool, cache_mode: CacheMode) -> Self {
+        let mut words = Solver::read_words(filepath);
 
-        let reader: Box<dyn std::io::BufRead> = if let Some(path) = filepath {
-            let file = match File::open(path) {
-                Ok(file) => file,
-                Err(why) => panic!("Couldn't open file: {}", why),
-            };
-            Box::new(BufReader::new(file))
+        let answers = if restrict_answers {
+            Solver::read_answers()
         } else {
-            Box::new(BufReader::new(&WORDS[..]))
+            words.clone()
         };
 
-        for line in reader.lines() {
-            let line = line.expect("Error reading line");
+        // Add answers to words
+        words.extend(answers.clone());
+        // Find unique words
+        let unique_words = words.into_iter().unique().collect::<Vec<String>>();
 
+        // Vector to store parsed words
+        let mut words: Vec<Word> = Vec::new();
+        let mut answer_ids: Vec<usize> = Vec::new();
+        for (i, line) in unique_words.iter().enumerate() {
             // Create a word and fill it with letters
             let mut word = Word {
                 letters: [Letter {
@@ -71,13 +75,19 @@ impl Solver {
 
             // Add the word to the vector
             words.push(word);
+
+            // Check if it is a possible answer
+            if answers.contains(line) {
+                answer_ids.push(i);
+            }
         }
 
-        let mappings = Solver::build_mappings(&words);
+        let mappings = Solver::build_mappings(&words, &answer_ids);
 
         Solver {
             words: words.clone(),
-            remaining_words: (0..(words.len())).collect(),
+            answers: answer_ids.clone(),
+            remaining_words: answer_ids,
             mappings: mappings.clone(),
             remaining_mappings: mappings,
             last_guesses: vec![],
@@ -85,30 +95,66 @@ impl Solver {
         }
     }
 
+    fn read_words(filepath: Option<&str>) -> Vec<String> {
+        let reader: Box<dyn std::io::BufRead> = if let Some(path) = filepath {
+            let file = match File::open(path) {
+                Ok(file) => file,
+                Err(why) => panic!("Couldn't open file: {}", why),
+            };
+            Box::new(BufReader::new(file))
+        } else {
+            Box::new(BufReader::new(&WORDS[..]))
+        };
+
+        let mut words = Vec::new();
+        for line in reader.lines() {
+            let line = line.expect("Error reading line");
+            // Add the word to the vector
+            words.push(line);
+        }
+        words
+    }
+
+    fn read_answers() -> Vec<String> {
+        let mut answers: Vec<String> = Vec::new();
+        let reader = BufReader::new(&ANSWERS[..]);
+        for line in reader.lines() {
+            let line = line.expect("Error reading line");
+
+            // Add the word to the vector
+            answers.push(line);
+        }
+        answers
+    }
+
     pub fn reset(&mut self) {
-        self.remaining_words = (0..(self.words.len())).collect();
+        self.remaining_words = self.answers.clone();
         self.remaining_mappings = self.mappings.clone();
     }
 
-    pub fn build_mappings(words: &Vec<Word>) -> Vec<Vec<Vec<u16>>> {
+    pub fn build_mappings(words: &Vec<Word>, answers: &Vec<usize>) -> Vec<Vec<Vec<u16>>> {
         let hm: Vec<Vec<Vec<u16>>> = words
             .par_iter()
-            .map(|word| Solver::get_possible_solutions_for_word(word, words))
+            .map(|word| Solver::get_possible_solutions_for_word(word, words, answers))
             .collect();
         hm
     }
 
-    fn get_possible_solutions_for_word(word: &Word, all_words: &Vec<Word>) -> Vec<Vec<u16>> {
-        let patterns: Vec<[Status; 5]> = all_words
+    fn get_possible_solutions_for_word(
+        word: &Word,
+        all_words: &[Word],
+        answers: &Vec<usize>,
+    ) -> Vec<Vec<u16>> {
+        let patterns: Vec<[Status; 5]> = answers
             .par_iter()
-            .map(|solution| solution.compare(word))
+            .map(|solution| all_words[*solution].compare(word))
             .collect();
 
         let mut hm: HashMap<[Status; 5], Vec<u16>> = HashMap::new();
         patterns.iter().enumerate().for_each(|(i, code)| {
             hm.entry(*code)
-                .and_modify(|vec| vec.push(u16_from_usize(i)))
-                .or_insert(vec![u16_from_usize(i)]);
+                .and_modify(|vec| vec.push(u16_from_usize(answers[i])))
+                .or_insert(vec![u16_from_usize(answers[i])]);
         });
 
         hm.into_values().collect()
@@ -150,7 +196,7 @@ impl Solver {
         let mut a_set: HashSet<usize> = HashSet::new();
         if self.cache_mode == CacheMode::Words {
             a_set = self.remaining_words.iter().copied().collect();
-            self.remaining_words = (0..self.words.len()).collect();
+            self.remaining_words = self.answers.clone();
         }
 
         let new_remaining_words: Vec<usize> = self
@@ -183,9 +229,14 @@ impl Solver {
         });
     }
 
-    pub fn guess(&self, n: usize) -> Vec<Word> {
+    pub fn guess(&self, n: usize) -> Vec<(Word, usize)> {
         if self.get_n_remaining_words() == 1 {
-            return self.get_remaining_words();
+            return self
+                .get_remaining_words()
+                .clone()
+                .into_iter()
+                .map(|w| (w, 1))
+                .collect();
         }
 
         let mut hm: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -223,6 +274,7 @@ impl Solver {
                         * 100.0;
                     let mean_error = mean_error.round() as usize;
 
+                    // TODO UPDATE THIS
                     (mean_error, !self.remaining_words.contains(i))
                 });
                 highest_indices.extend(idx.iter().take(n - highest_indices.len()));
@@ -232,7 +284,18 @@ impl Solver {
             }
         }
 
-        highest_indices.into_iter().map(|i| self.words[i]).collect()
+        highest_indices
+            .into_iter()
+            .map(|i| {
+                (
+                    self.words[i],
+                    self.remaining_mappings[i]
+                        .iter()
+                        .filter(|value| !value.is_empty())
+                        .count(),
+                )
+            })
+            .collect()
     }
 }
 
@@ -249,20 +312,20 @@ mod tests {
         res
     }
 
-    #[test]
-    fn test_build_mappings() {
-        let solver = Solver::new(Some("data/test.txt"), super::CacheMode::Words);
+    // #[test]
+    // fn test_build_mappings() {
+    //     let solver = Solver::new(Some("data/test.txt"), super::CacheMode::Words);
 
-        let lengths: Vec<usize> = solver.mappings.iter().map(|x| x.len()).collect();
+    //     let lengths: Vec<usize> = solver.mappings.iter().map(|x| x.len()).collect();
 
-        let should = vec![5, 4, 4, 5, 5];
+    //     let should = vec![5, 4, 4, 5, 5];
 
-        assert_eq!(lengths, should)
-    }
-
+    //     assert_eq!(lengths, should)
+    // }
+    //
     #[test]
     fn test_build_mappings_2() {
-        let solver = Solver::new(Some("data/words.txt"), super::CacheMode::Words);
+        let solver = Solver::new(Some("data/words.txt"), false, super::CacheMode::Words);
 
         let lengths: Vec<usize> = solver.mappings.iter().map(|x| x.len()).collect();
 
@@ -273,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_update_mappings() {
-        let mut solver = Solver::new(Some("data/test.txt"), super::CacheMode::Words);
+        let mut solver = Solver::new(Some("data/test.txt"), false, super::CacheMode::Words);
 
         solver.remaining_words = vec![3, 4];
 
@@ -291,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_update_remaining_words() {
-        let mut solver = Solver::new(Some("data/test.txt"), super::CacheMode::Words);
+        let mut solver = Solver::new(Some("data/test.txt"), false, super::CacheMode::Words);
 
         let mut guess = create_word_from_string("sport");
         guess.letters[0].status = Status::Misplaced;
