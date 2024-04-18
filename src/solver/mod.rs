@@ -7,6 +7,7 @@ use word::Word;
 use itertools::Itertools;
 use rayon::prelude::*;
 
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -229,61 +230,25 @@ impl Solver {
         });
     }
 
-    pub fn guess(&self, n: usize) -> Vec<(Word, usize)> {
+    pub fn guess(&self, n: usize) -> Vec<(Word, usize, f32)> {
         if self.get_n_remaining_words() == 1 {
             return self
                 .get_remaining_words()
                 .clone()
                 .into_iter()
-                .map(|w| (w, 1))
+                .map(|w| (w, 1, 0.0))
                 .collect();
         }
 
-        let mut hm: HashMap<usize, Vec<usize>> = HashMap::new();
-        self.remaining_mappings
-            .iter()
-            .enumerate()
-            .for_each(|(i, word)| {
-                let sum = word.iter().filter(|value| !value.is_empty()).count();
-                hm.entry(sum).or_default().push(i);
-            });
+        let mut indices: Vec<usize> = (0..self.remaining_mappings.len()).collect();
+        indices.sort_by_cached_key(|i| {
+            let entropy =
+                Solver::entropy(&self.remaining_mappings[*i], self.get_n_remaining_words());
+            let entropy = (entropy * 100.0).round() as usize;
+            (Reverse(entropy), !self.remaining_words.contains(i))
+        });
 
-        let mut sorted_keys: Vec<&usize> = hm.keys().collect();
-        sorted_keys.sort_by(|a, b| b.cmp(a));
-
-        let mut highest_indices: Vec<usize> = vec![];
-        for key in sorted_keys {
-            if let Some(idx) = hm.get(key) {
-                let mut idx = idx.clone();
-
-                // Sort the by variance of the possibliies in group.
-                // eg. a guess that makes two groups of 5 solutions is better
-                // than a guess that makes two groups of 9 and 1 solutions
-                // Sort so that the value that are possible solutions are first
-                idx.sort_by_cached_key(|i| {
-                    let mean_idx_per_group: f64 = self.remaining_mappings[*i]
-                        .iter()
-                        .map(|x| x.len() as f64)
-                        .sum::<f64>()
-                        / *key as f64;
-                    let mean_error = self.remaining_mappings[*i]
-                        .iter()
-                        .filter(|x| !x.is_empty())
-                        .map(|x| (x.len() as f64 - mean_idx_per_group).powf(2.0))
-                        .sum::<f64>()
-                        * 100.0;
-                    let mean_error = mean_error.round() as usize;
-
-                    // TODO UPDATE THIS
-                    (mean_error, !self.remaining_words.contains(i))
-                });
-                highest_indices.extend(idx.iter().take(n - highest_indices.len()));
-            }
-            if highest_indices.len() >= n {
-                break;
-            }
-        }
-
+        let highest_indices: Vec<usize> = indices.iter().take(n).cloned().collect();
         highest_indices
             .into_iter()
             .map(|i| {
@@ -293,9 +258,19 @@ impl Solver {
                         .iter()
                         .filter(|value| !value.is_empty())
                         .count(),
+                    Solver::entropy(&self.remaining_mappings[i], self.get_n_remaining_words()),
                 )
             })
             .collect()
+    }
+
+    fn entropy(word_mappings: &[Vec<u16>], len_words: usize) -> f32 {
+        word_mappings
+            .iter()
+            .map(|x| {
+                -f32::log2(x.len() as f32 / len_words as f32) * x.len() as f32 / len_words as f32
+            })
+            .sum()
     }
 }
 
@@ -303,6 +278,14 @@ impl Solver {
 mod tests {
 
     use super::*;
+    use approx::*;
+
+    #[test]
+    fn test_entropy() {
+        assert_relative_eq!(Solver::entropy(&vec![vec![1], vec![2]], 2), 1.0);
+
+        assert_relative_eq!(Solver::entropy(&vec![vec![1, 2], vec![3]], 3), 0.9182958);
+    }
 
     fn create_word_from_string(word: &str) -> Word {
         let mut res = Word::new();

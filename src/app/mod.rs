@@ -232,7 +232,7 @@ impl Widget for &App {
             .solver
             .guess(10)
             .into_iter()
-            .map(|(g, n)| format!(" {g} ({n} groups)").into())
+            .map(|(g, n, e)| format!(" {g} ({n} groups, entropy {e:.2})").into())
             .collect::<Vec<Line<'_>>>();
         lines.extend(next_guess);
         Paragraph::new(lines).render(rows[0], buf);
