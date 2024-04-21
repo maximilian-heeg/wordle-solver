@@ -6,18 +6,25 @@ use ratatui::{
     prelude::*,
     widgets::{block::*, *},
 };
-use wordlebot::wordle::decode_status;
+use wordlebot::wordle::{decode_status, encode_status};
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let border = self.create_border();
 
+        let rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Fill(1), Constraint::Length(20)])
+            .split(border.inner(area));
+
         let columns = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Length(55), Constraint::Fill(1)])
-            .split(border.inner(area));
+            .split(rows[0]);
+
         self.render_guess_area(columns[0], buf);
         self.render_solver_area(columns[1], buf);
+        self.render_chart(rows[1], buf);
 
         border.render(area, buf);
     }
@@ -61,6 +68,7 @@ impl App {
             .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Length(N_SUGGESTIONS as u16 + 3),
+                Constraint::Length(10),
                 Constraint::Fill(1),
             ])
             .split(block.inner(area));
@@ -112,6 +120,64 @@ impl App {
             .render(rows[1], buf);
 
         block.render(area, buf);
+    }
+
+    fn render_chart(&self, area: Rect, buf: &mut Buffer) {
+        let i = if self.selected_word > self.evaludations.len() - 1 {
+            self.evaludations.len() - 1
+        } else {
+            self.selected_word
+        };
+        if let Some(eval) = self.evaludations.get(i) {
+            let status = match eval.status {
+                Some(x) => encode_status(&x),
+                None => 0,
+            };
+            let sizes: Vec<_> = eval
+                .group_sizes
+                .iter()
+                .map(|(s, size)| {
+                    let style = if s == &status {
+                        Style::new().red()
+                    } else {
+                        Style::new().dark_gray()
+                    };
+                    Bar::default()
+                        .value(*size as u64)
+                        .style(style)
+                        .text_value("".to_string())
+                })
+                .collect();
+
+            let width = match area.width / sizes.len() as u16 {
+                x if x == 0 => 1,
+                x if x > 10 => 10,
+                x => x,
+            };
+
+            let chart = BarChart::default()
+                .block(
+                    Block::default()
+                        .title(
+                            Title::from(
+                                format!(
+                                    " Histogram of group sizes of guess number {}: {} ",
+                                    i + 1,
+                                    eval.word
+                                )
+                                .bold(),
+                            )
+                            .alignment(Alignment::Center),
+                        )
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .border_style(Style::new().dark_gray()),
+                )
+                .bar_width(width)
+                .bar_gap(0)
+                .data(BarGroup::default().bars(&sizes));
+            chart.render(area, buf);
+        }
     }
 
     fn render_evaluation(&self, area: Rect, buf: &mut Buffer) {

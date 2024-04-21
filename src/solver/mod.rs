@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -41,11 +42,6 @@ fn entropy(x: &ArrayView<f32, Ix1>) -> f32 {
             -p * f32::log2(p)
         })
         .sum()
-}
-
-fn get_group_size(id: usize, distributions: &Array<f32, Ix2>) -> usize {
-    let distribution = distributions.row(id);
-    distribution.iter().filter(|&x| *x > 0.0).count()
 }
 
 fn rank_guess(entropy: f32, prior: f32, penalty: f32, possible: bool) -> f32 {
@@ -151,12 +147,17 @@ impl Solver {
 
         let real_bits = n_after.map(|x| f32::log2(remaining_words.len() as f32 / x as f32));
 
+        let group_sizes = self.get_group_sizes(word_id, remaining_words);
+        let max_group_size = &group_sizes.iter().map(|(_, v)| *v).max().unwrap_or(0);
+
         GuessEvaluation {
             word: *word,
+            status,
             expected_bits: entropies[0],
             real_bits,
-            groups: get_group_size(0, &distributions),
-            max_group_size: self.get_max_group_size(word_id, remaining_words),
+            groups: group_sizes.len(),
+            group_sizes,
+            max_group_size: *max_group_size,
             n_remaining_before: remaining_words.len(),
             n_remaining_after: n_after,
             is_possible: remaining_words.contains(&word_id),
@@ -187,15 +188,20 @@ impl Solver {
         intersection.len()
     }
 
-    fn get_max_group_size(&self, word_id: usize, remaining_words: &[usize]) -> usize {
+    fn get_group_sizes(&self, word_id: usize, remaining_words: &[usize]) -> Vec<(u8, usize)> {
         let pattern_matrix = self.mappings.row(word_id).select(Axis(0), remaining_words);
         let mut frequency_map = HashMap::new();
 
         pattern_matrix.iter().for_each(|num| {
-            *frequency_map.entry(num).or_insert(0) += 1;
+            *frequency_map.entry(*num).or_insert(0) += 1;
         });
-        let max_frequency = frequency_map.values().cloned().max().unwrap_or(0);
-        max_frequency
+
+        // Convert the hashmap into a vector of key-value pairs
+        let mut sorted_vec: Vec<_> = frequency_map.into_iter().collect();
+
+        // Sort the vector by keys
+        sorted_vec.sort_by_key(|&(_, key)| Reverse(key));
+        sorted_vec
     }
 
     pub fn guess(&self, n: usize, remaining_words: &[usize], pentalty: f32) -> Vec<Word> {
@@ -250,12 +256,14 @@ impl Solver {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct GuessEvaluation {
     pub word: Word,
+    pub status: Option<[LetterStatus; 5]>,
     pub expected_bits: f32,
     pub real_bits: Option<f32>,
     pub groups: usize,
+    pub group_sizes: Vec<(u8, usize)>,
     pub max_group_size: usize,
     pub n_remaining_before: usize,
     pub n_remaining_after: Option<usize>,

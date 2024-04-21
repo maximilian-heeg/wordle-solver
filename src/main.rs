@@ -205,7 +205,7 @@ fn try_to_solve(
         return 1;
     }
 
-    for step in 2..(max_rounds + 1) {
+    for step in 2..=max_rounds {
         let remaining_idx = solver.get_remaining_words_idx(&guesses);
 
         let penalty = 0.1;

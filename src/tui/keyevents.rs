@@ -11,6 +11,10 @@ impl App {
             KeyCode::Left => self.move_left(),
             KeyCode::Down => self.move_down(),
             KeyCode::Up => self.move_up(),
+            KeyCode::Enter => {
+                self.move_down();
+                self.selected_letter = 0;
+            }
 
             // Enter words
             KeyCode::Char(x) if x.is_ascii_alphabetic() => {
