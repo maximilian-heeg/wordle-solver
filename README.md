@@ -1,6 +1,6 @@
 ## Wordle solver
 
-![screenshot.jpg](screenshot.png)
+![A screenshot of the tool](screenshot.png)
 
 ### Run
 
