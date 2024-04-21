@@ -1,5 +1,7 @@
 ## Wordle solver
 
+![screenshot.jpg](screenshot.png)
+
 ### Run
 
 - `cargo run --release` for TUI

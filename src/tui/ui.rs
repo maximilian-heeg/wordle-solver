@@ -14,7 +14,7 @@ impl Widget for &App {
 
         let rows = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Fill(1), Constraint::Length(20)])
+            .constraints(vec![Constraint::Length(35), Constraint::Min(5)])
             .split(border.inner(area));
 
         let columns = Layout::default()

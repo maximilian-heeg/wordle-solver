@@ -12,7 +12,7 @@ mod keyevents;
 mod ui;
 mod update;
 
-const N_SUGGESTIONS: usize = 20;
+const N_SUGGESTIONS: usize = 15;
 
 /// A type alias for the terminal type used in this application
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
