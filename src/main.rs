@@ -10,6 +10,7 @@ use wordlebot::{
     wordle::{create_word_from_string, decode_status, Guess, LetterStatus::*, Word},
 };
 
+mod deep;
 mod tui;
 
 /// Wordle solver
@@ -18,6 +19,10 @@ mod tui;
 struct Arguments {
     #[command(subcommand)]
     command: Option<Commands>,
+
+    // Two level entropy calculation
+    #[arg(short, long)]
+    two_level: bool,
 }
 
 #[derive(Args, Debug)]
@@ -36,6 +41,9 @@ enum Commands {
     /// Default. Launch with graphical interface
     Tui {},
 
+    /// Deep search
+    Deep {},
+
     /// Benchmark against all words in file
     Benchmark {
         #[command(flatten)]
@@ -52,7 +60,8 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Arguments::parse();
 
     println!(
@@ -60,12 +69,21 @@ fn main() -> Result<()> {
         "Initializing solver. This might take a while...".blue()
     );
     let solver = wordlebot::solver::Solver::new().context("Error initializing solver")?;
+
     match args.command {
         Some(Commands::Tui {}) | None => {
+            tui::initialize_panic_handler();
             let mut terminal = tui::init()?;
-            let app_result = tui::App::init(solver).run(&mut terminal);
+            let app_result = tui::App::init(solver, args.two_level)
+                .run(&mut terminal)
+                .await;
             tui::restore()?;
+            println!("{}", "Shutting down...".blue());
             app_result?;
+            Ok(())
+        }
+        Some(Commands::Deep {}) => {
+            deep::deep(&solver);
             Ok(())
         }
         Some(Commands::Benchmark { cli_args }) => {
@@ -164,6 +182,7 @@ fn print_guess_evaludation(guess: &Guess, remaining_words: &[usize], solver: &So
         &guess.word,
         remaining_words,
         Some(decode_status(guess.status)),
+        false,
     );
     println!(
         " {} - n before: {:4?} | n after: {:4?} | bits {:.2} | n groups {:3} | max group {:4}",

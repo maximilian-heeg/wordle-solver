@@ -1,3 +1,4 @@
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -9,6 +10,7 @@ use ndarray::{prelude::*, Zip};
 
 pub mod data;
 
+#[derive(Clone)]
 pub struct Solver {
     // An array of words
     words: Vec<Word>,
@@ -127,6 +129,7 @@ impl Solver {
         word: &Word,
         remaining_words: &[usize],
         status: Option<[LetterStatus; 5]>,
+        two_level_bit: bool,
     ) -> GuessEvaluation {
         let word_id = self
             .words
@@ -142,6 +145,29 @@ impl Solver {
             .copied()
             .collect();
 
+        let distributions: Vec<(u8, f32)> = distributions
+            .row(0)
+            .into_iter()
+            .enumerate()
+            .map(|(status, &prop)| (status as u8, prop))
+            .collect();
+
+        let total_sum: f32 = distributions.iter().map(|(_, prop)| *prop).sum();
+
+        let group_probabilities: Vec<(u8, f32)> = distributions
+            .into_iter()
+            .map(|(i, prop)| (i, prop / total_sum))
+            .collect();
+
+        let avg_entropy_next_level = if two_level_bit {
+            Some(
+                self.avg_entropy_next_level(word, &group_probabilities, remaining_words)
+                    + entropies[0],
+            )
+        } else {
+            None
+        };
+
         let n_after =
             status.map(|status| self.get_n_solutions_after_guess(word_id, remaining_words, status));
 
@@ -155,8 +181,10 @@ impl Solver {
             status,
             expected_bits: entropies[0],
             real_bits,
+            two_level_bits: avg_entropy_next_level,
             groups: group_sizes.len(),
             group_sizes,
+            group_probabilities,
             max_group_size: *max_group_size,
             n_remaining_before: remaining_words.len(),
             n_remaining_after: n_after,
@@ -254,6 +282,34 @@ impl Solver {
     pub fn is_valid_guess(&self, word: &Word) -> bool {
         self.words.contains(word)
     }
+
+    /// This function calculates the avg bits of information
+    /// for all next guesses of a guess
+    fn avg_entropy_next_level(
+        &self,
+        word: &Word,
+        group_probabilities: &[(u8, f32)],
+        remaining_words: &[usize],
+    ) -> f32 {
+        let hm: HashSet<&usize> = HashSet::from_iter(remaining_words);
+        let avg_bits: f32 = group_probabilities
+            .par_iter()
+            .map(|(status, prop)| {
+                let guess = Guess::from_word(*word, decode_status(*status));
+                let new_remaining_words = self.get_remaining_words_idx(&[guess]);
+                let new_remaining_words: HashSet<&usize> = HashSet::from_iter(&new_remaining_words);
+                let remaining_words: Vec<_> = hm
+                    .intersection(&new_remaining_words)
+                    .copied()
+                    .copied()
+                    .collect();
+                let next = self.guess(1, &remaining_words, 0.1)[0];
+                let next_eval = self.evalute_guess(&next, &remaining_words, None, false);
+                *prop * next_eval.expected_bits
+            })
+            .sum();
+        avg_bits
+    }
 }
 
 #[derive(Clone)]
@@ -262,8 +318,10 @@ pub struct GuessEvaluation {
     pub status: Option<[LetterStatus; 5]>,
     pub expected_bits: f32,
     pub real_bits: Option<f32>,
+    pub two_level_bits: Option<f32>,
     pub groups: usize,
     pub group_sizes: Vec<(u8, usize)>,
+    pub group_probabilities: Vec<(u8, f32)>,
     pub max_group_size: usize,
     pub n_remaining_before: usize,
     pub n_remaining_after: Option<usize>,
@@ -456,6 +514,7 @@ mod tests {
             &guess,
             &solver.get_frequent_word_idx(),
             Some([Misplaced, Absent, Misplaced, Absent, Correct]),
+            false,
         );
 
         assert_eq!(res.groups, 154);

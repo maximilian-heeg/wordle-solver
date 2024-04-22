@@ -364,6 +364,26 @@ mod tests {
         let guess = create_word_from_string("eater");
         let expected = [Absent, Correct, Correct, Correct, Correct];
         assert_eq!(word.compare(&guess), expected);
+
+        let word = create_word_from_string("abide");
+        let guess = create_word_from_string("speed");
+        let expected = [Absent, Absent, Misplaced, Absent, Misplaced];
+        assert_eq!(word.compare(&guess), expected);
+
+        let word = create_word_from_string("erase");
+        let guess = create_word_from_string("speed");
+        let expected = [Misplaced, Absent, Misplaced, Misplaced, Absent];
+        assert_eq!(word.compare(&guess), expected);
+
+        let word = create_word_from_string("steal");
+        let guess = create_word_from_string("speed");
+        let expected = [Correct, Absent, Correct, Absent, Absent];
+        assert_eq!(word.compare(&guess), expected);
+
+        let word = create_word_from_string("crepe");
+        let guess = create_word_from_string("speed");
+        let expected = [Absent, Misplaced, Correct, Misplaced, Absent];
+        assert_eq!(word.compare(&guess), expected);
     }
 
     #[test]

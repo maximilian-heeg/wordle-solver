@@ -1,4 +1,5 @@
 use std::iter::zip;
+use tokio::runtime::Handle;
 
 use super::{App, N_SUGGESTIONS};
 use crate::wordlebot::wordle::{Guess, LetterStatus};
@@ -28,6 +29,30 @@ impl Widget for &App {
 
         border.render(area, buf);
     }
+}
+
+// ANCHOR: centered_rect
+/// helper function to create a centered rect using up certain percentage of the available rect `r`
+fn centered_rect(x: u16, y: u16, r: Rect) -> Rect {
+    // Cut the given rectangle into three vertical pieces
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(y),
+            Constraint::Length(10),
+        ])
+        .split(r);
+
+    // Then cut the middle vertical piece into three width-wise pieces
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(x),
+            Constraint::Fill(1),
+        ])
+        .split(popup_layout[1])[1] // Return the middle chunk
 }
 
 impl App {
@@ -150,7 +175,7 @@ impl App {
                 .collect();
 
             let width = match area.width / sizes.len() as u16 {
-                x if x == 0 => 1,
+                0 => 1,
                 x if x > 10 => 10,
                 x => x,
             };
@@ -190,7 +215,13 @@ impl App {
         let rows: Vec<_> = self
             .evaludations
             .iter()
-            .map(|w| {
+            .enumerate()
+            .map(|(i, w)| {
+                let style = if self.selected_word == i {
+                    Style::new().white()
+                } else {
+                    Style::new()
+                };
                 Row::new(vec![
                     Text::from(format!("{}", w.word)).alignment(Alignment::Left),
                     Text::from(format!("{:.2}", w.expected_bits)).alignment(Alignment::Center),
@@ -200,6 +231,7 @@ impl App {
                     Text::from(w.n_remaining_after.unwrap().to_string())
                         .alignment(Alignment::Center),
                 ])
+                .style(style)
             })
             .collect();
         let widths = [
@@ -239,21 +271,27 @@ impl App {
     }
 
     fn render_suggestions(&self, area: Rect, buf: &mut Buffer) {
+        let two_level_style = if self.two_level { 7 } else { 0 };
         let rows: Vec<_> = self
             .suggestions
             .iter()
             .map(|w| {
                 let style = if w.is_possible {
-                    Style::default()
+                    Style::default().white()
                 } else {
-                    Style::default().gray()
+                    Style::default()
                 };
+
+                let two_level_bits = w.two_level_bits.unwrap_or(0.);
 
                 Row::new(vec![
                     Text::from(format!("{}", w.word))
                         .alignment(Alignment::Left)
                         .style(style),
                     Text::from(format!("{:.2}", w.expected_bits))
+                        .alignment(Alignment::Center)
+                        .style(style),
+                    Text::from(format!("{:.2?}", two_level_bits))
                         .alignment(Alignment::Center)
                         .style(style),
                     Text::from(w.groups.to_string())
@@ -271,6 +309,7 @@ impl App {
         let widths = [
             Constraint::Length(10),
             Constraint::Length(8),
+            Constraint::Length(two_level_style),
             Constraint::Length(8),
             Constraint::Length(9),
             Constraint::Length(5),
@@ -284,12 +323,34 @@ impl App {
             .header(Row::new(vec![
                 Cell::from("Suggestion").underlined(),
                 Cell::from("Exp. Bits").underlined(),
+                Cell::from("2-l Bits").underlined(),
                 Cell::from("n groups").underlined(),
                 Cell::from("max group").underlined(),
                 Cell::from("prior").underlined(),
             ]))
             .block(Block::new().padding(Padding::new(0, 0, 1, 0)));
         ratatui::widgets::Widget::render(table, area, buf);
+
+        // Check if active task
+        let metrics = Handle::current().metrics();
+        let n = metrics.active_tasks_count();
+        if n > 1 {
+            let popup_block = Block::default()
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::Red))
+                .padding(Padding::uniform(1));
+            let popup_area = centered_rect(30, 4, area);
+
+            Clear.render(popup_area, buf);
+            Paragraph::new(vec![
+                Line::from("Working on the best"),
+                Line::from("solutions for you"),
+            ])
+            .alignment(Alignment::Center)
+            .white()
+            .block(popup_block)
+            .render(popup_area, buf);
+        }
     }
 }
 
