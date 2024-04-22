@@ -10,7 +10,6 @@ use wordlebot::{
     wordle::{create_word_from_string, decode_status, Guess, LetterStatus::*, Word},
 };
 
-mod deep;
 mod tui;
 
 /// Wordle solver
@@ -40,9 +39,6 @@ struct CliArgs {
 enum Commands {
     /// Default. Launch with graphical interface
     Tui {},
-
-    /// Deep search
-    Deep {},
 
     /// Benchmark against all words in file
     Benchmark {
@@ -82,22 +78,25 @@ async fn main() -> Result<()> {
             app_result?;
             Ok(())
         }
-        Some(Commands::Deep {}) => {
-            deep::deep(&solver);
-            Ok(())
-        }
         Some(Commands::Benchmark { cli_args }) => {
-            let starting_word = pick_starting_word(cli_args.starting_word, &solver);
-            benchmark(&solver, cli_args.max_rounds, starting_word);
+            let starting_word = pick_starting_word(cli_args.starting_word, &solver, args.two_level);
+            benchmark(&solver, cli_args.max_rounds, starting_word, args.two_level);
             Ok(())
         }
         Some(Commands::Solve { cli_args, words }) => {
             use std::time::Instant;
-            let starting_word = pick_starting_word(cli_args.starting_word, &solver);
+            let starting_word = pick_starting_word(cli_args.starting_word, &solver, args.two_level);
             for word in words {
                 let now = Instant::now();
                 let word = create_word_from_string(&word);
-                try_to_solve(&word, &solver, cli_args.max_rounds, true, starting_word);
+                try_to_solve(
+                    &word,
+                    &solver,
+                    cli_args.max_rounds,
+                    true,
+                    starting_word,
+                    args.two_level,
+                );
                 let elapsed = now.elapsed();
                 println!(" --- Elapsed: {:.2?}", elapsed);
             }
@@ -106,14 +105,35 @@ async fn main() -> Result<()> {
     }
 }
 
-fn pick_starting_word(word: Option<String>, solver: &Solver) -> Word {
+fn pick_starting_word(word: Option<String>, solver: &Solver, two_level: bool) -> Word {
     match word {
         Some(word) => create_word_from_string(&word),
-        None => solver.guess(1, &solver.get_frequent_word_idx(), 0.0)[0],
+        None => {
+            if two_level {
+                pick_two_level(&[], solver, 0.0)
+            } else {
+                solver.guess(1, &solver.get_frequent_word_idx(), 0.0)[0]
+            }
+        }
     }
 }
 
-fn benchmark(solver: &Solver, max_rounds: usize, start: Word) {
+fn pick_two_level(guesses: &[Guess], solver: &Solver, penalty: f32) -> Word {
+    let remaining_words = solver.get_remaining_words_idx(guesses);
+    let suggestions = solver.guess(10, &remaining_words, penalty);
+
+    let mut suggestions: Vec<GuessEvaluation> = suggestions
+        .iter()
+        .map(|w| solver.evalute_guess(w, &remaining_words, None, true))
+        .collect();
+
+    suggestions.sort_by(|s1, s2| s2.two_level_bits.partial_cmp(&s1.two_level_bits).unwrap());
+
+    let word = suggestions.first().unwrap();
+    word.word
+}
+
+fn benchmark(solver: &Solver, max_rounds: usize, start: Word, two_level: bool) {
     let words = solver.get_words_from_idx(&solver.get_frequent_word_idx());
 
     println!("Starting benchmark.");
@@ -124,7 +144,7 @@ fn benchmark(solver: &Solver, max_rounds: usize, start: Word) {
     let mut steps: Vec<usize> = words
         .par_iter()
         .progress_with_style(style)
-        .map(|word| try_to_solve(word, solver, max_rounds, false, start))
+        .map(|word| try_to_solve(word, solver, max_rounds, false, start, two_level))
         .collect();
 
     let failed = steps.iter().filter(|&x| *x == (0_usize)).count();
@@ -178,21 +198,24 @@ fn benchmark(solver: &Solver, max_rounds: usize, start: Word) {
 }
 
 fn print_guess_evaludation(guess: &Guess, remaining_words: &[usize], solver: &Solver) {
+    let two_level = true;
     let res = solver.evalute_guess(
         &guess.word,
         remaining_words,
         Some(decode_status(guess.status)),
-        false,
+        two_level,
     );
+
     println!(
-        " {} - n before: {:4?} | n after: {:4?} | bits {:.2} | n groups {:3} | max group {:4}",
-        guess,
-        res.n_remaining_before,
-        res.n_remaining_after.unwrap(),
-        res.expected_bits,
-        res.groups,
-        res.max_group_size
-    )
+            " {} - n before: {:4?} | n after: {:4?} | bits {:.2} | 2l bits {:2.2} | n groups {:3} | max group {:4}",
+            guess,
+            res.n_remaining_before,
+            res.n_remaining_after.unwrap(),
+            res.expected_bits,
+            res.two_level_bits.unwrap(),
+            res.groups,
+            res.max_group_size
+        )
 }
 
 fn try_to_solve(
@@ -201,6 +224,7 @@ fn try_to_solve(
     max_rounds: usize,
     print: bool,
     start: Word,
+    two_level: bool,
 ) -> usize {
     let mut guesses: Vec<Guess> = vec![];
     let status = word.compare(&start);
@@ -228,7 +252,10 @@ fn try_to_solve(
         let remaining_idx = solver.get_remaining_words_idx(&guesses);
 
         let penalty = 0.1;
-        let next_guess = solver.guess(1, &remaining_idx, penalty)[0];
+        let next_guess = match two_level {
+            true => pick_two_level(&guesses, solver, penalty),
+            false => solver.guess(1, &remaining_idx, penalty)[0],
+        };
 
         let status = word.compare(&next_guess);
         guesses.push(Guess::from_word(next_guess, status));

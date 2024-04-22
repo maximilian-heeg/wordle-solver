@@ -232,7 +232,7 @@ impl Solver {
         sorted_vec
     }
 
-    pub fn guess(&self, n: usize, remaining_words: &[usize], pentalty: f32) -> Vec<Word> {
+    pub fn guess(&self, n: usize, remaining_words: &[usize], penalty: f32) -> Vec<Word> {
         if remaining_words.len() == 1 {
             return remaining_words.iter().map(|&i| self.words[i]).collect();
         }
@@ -255,11 +255,11 @@ impl Solver {
         let mut indices: Vec<usize> = (0..self.words.len()).collect();
         // indices.sort_by_cached_key(|i| (Reverse(entropies[*i])));
         indices.sort_by(|&a, &b| {
-            rank_guess(entropies[b], self.priors[b], pentalty, is_in_remaining[b])
+            rank_guess(entropies[b], self.priors[b], penalty, is_in_remaining[b])
                 .partial_cmp(&rank_guess(
                     entropies[a],
                     self.priors[a],
-                    pentalty,
+                    penalty,
                     is_in_remaining[a],
                 ))
                 .unwrap()
