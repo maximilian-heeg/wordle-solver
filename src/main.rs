@@ -137,15 +137,24 @@ fn pick_two_level(guesses: &[Guess], solver: &Solver, penalty: f32) -> Word {
         .collect();
 
     suggestions.sort_by(|(p1, s1), (p2, s2)| {
-        rank_guess(s2.two_level_bits.unwrap(), s2.prior, penalty, *p1)
+        rank_guess(s2.two_level_bits.unwrap(), s2.prior, penalty * 2., *p2)
             .partial_cmp(&rank_guess(
                 s1.two_level_bits.unwrap(),
                 s1.prior,
-                penalty,
-                *p2,
+                penalty * 2.,
+                *p1,
             ))
             .unwrap()
     });
+
+    // suggestions.iter().for_each(|(p, s)| {
+    //     println!(
+    //         "{} {} {}",
+    //         s.word,
+    //         rank_guess(s.two_level_bits.unwrap(), s.prior, penalty * 2., *p),
+    //         p
+    //     );
+    // });
 
     let (_, word) = suggestions.first().unwrap();
     word.word
