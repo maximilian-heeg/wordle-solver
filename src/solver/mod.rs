@@ -46,7 +46,7 @@ fn entropy(x: &ArrayView<f32, Ix1>) -> f32 {
         .sum()
 }
 
-fn rank_guess(entropy: f32, prior: f32, penalty: f32, possible: bool) -> f32 {
+pub fn rank_guess(entropy: f32, prior: f32, penalty: f32, possible: bool) -> f32 {
     if !possible {
         return entropy;
     }
@@ -122,6 +122,10 @@ impl Solver {
 
     pub fn get_words_from_idx(&self, idx: &[usize]) -> Vec<Word> {
         idx.iter().map(|&i| self.words[i]).collect()
+    }
+
+    pub fn get_id_for_word(&self, word: &Word) -> Option<usize> {
+        self.words.iter().position(|w| word == w)
     }
 
     pub fn evalute_guess(

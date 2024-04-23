@@ -122,14 +122,32 @@ fn pick_two_level(guesses: &[Guess], solver: &Solver, penalty: f32) -> Word {
     let remaining_words = solver.get_remaining_words_idx(guesses);
     let suggestions = solver.guess(10, &remaining_words, penalty);
 
-    let mut suggestions: Vec<GuessEvaluation> = suggestions
+    let suggestions: Vec<GuessEvaluation> = suggestions
         .iter()
         .map(|w| solver.evalute_guess(w, &remaining_words, None, true))
         .collect();
 
-    suggestions.sort_by(|s1, s2| s2.two_level_bits.partial_cmp(&s1.two_level_bits).unwrap());
+    let mut suggestions: Vec<(bool, GuessEvaluation)> = suggestions
+        .into_iter()
+        .map(|word| {
+            let id = solver.get_id_for_word(&word.word).unwrap();
+            let possible = remaining_words.contains(&id);
+            (possible, word)
+        })
+        .collect();
 
-    let word = suggestions.first().unwrap();
+    suggestions.sort_by(|(p1, s1), (p2, s2)| {
+        rank_guess(s2.two_level_bits.unwrap(), s2.prior, penalty, *p1)
+            .partial_cmp(&rank_guess(
+                s1.two_level_bits.unwrap(),
+                s1.prior,
+                penalty,
+                *p2,
+            ))
+            .unwrap()
+    });
+
+    let (_, word) = suggestions.first().unwrap();
     word.word
 }
 
